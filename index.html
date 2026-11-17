@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang=3D"de">
+<head>
+  <meta charset=3D"UTF-8">
+  <meta name=3D"viewport" content=3D"width=3Ddevice-width, initial-scale=3D1=
+.0">
+  <title>Interaktives Schachbuch</title>
+  <!-- CSS f=C3=BCr das Schachbrett laden -->
+  <link rel=3D"stylesheet" href=3D"https://jsdelivr.net">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#2b5b84">
+
+  <style>
+    :root {
+      --bg-color: #f4f4f6;
+      --text-color: #1a1a1a;
+      --card-bg: #ffffff;
+      --accent: #2b5b84;
+    }
+
+    /* Kontrastreicher E-Ink-Modus ohne Schatten oder Graustufen */
+    body.e-ink {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --card-bg: #ffffff;
+      --accent: #000000;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      max-width: 500px;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      margin: 0;
+    }
+
+    #board {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      margin-bottom: 12px;
+    }
+
+    /* Im E-Ink-Modus Brett-Farben auf starkes Schwarz/Wei=C3=9F anpassen */=
+
+    body.e-ink .cm-chessboard .board .square.white {
+      fill: #ffffff;
+    }
+    body.e-ink .cm-chessboard .board .square.black {
+      fill: #888888;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      background-color: var(--card-bg);
+      color: var(--text-color);
+      border: 2px solid var(--accent);
+      border-radius: 6px;
+    }
+
+    button:active {
+      background-color: var(--accent);
+      color: #ffffff;
+    }
+
+    .comment-box {
+      background-color: var(--card-bg);
+      border: 1px solid #cccccc;
+      border-radius: 6px;
+      padding: 16px;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+
+    body.e-ink .comment-box {
+      border: 2px solid #000000;
+    }
+
+    .move-indicator {
+      font-weight: bold;
+      margin-bottom: 6px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<div class=3D"container">
+  <div class=3D"header">
+    <h1 id=3D"game-title">Kapitel 1: Das Sch=C3=A4fermatt</h1>
+    <button id=3D"eink-toggle" style=3D"padding: 6px 10px; font-size: 0.85re=
+m;">E-Ink: AUS</button>
+  </div>
+
+  <!-- Hier wird das Brett gerendert -->
+  <div id=3D"board"></div>
+
+  <!-- Steuerungs-Buttons -->
+  <div class=3D"controls">
+    <button id=3D"btn-start" title=3D"Anfang">|&lt;</button>
+    <button id=3D"btn-prev" title=3D"Zur=C3=BCck">&lt;</button>
+    <button id=3D"btn-next" title=3D"Vor">&gt;</button>
+    <button id=3D"btn-end" title=3D"Ende">&gt;|</button>
+  </div>
+
+  <!-- Kommentarbereich aus dem Buch -->
+  <div class=3D"comment-box">
+    <span class=3D"move-indicator" id=3D"move-info">Ausgangsstellung</span>
+    <div id=3D"comment-text">Nutze die Pfeiltasten oder Buttons, um die Z=C3=
+=BCge durchzugehen.</div>
+  </div>
+</div>
+
+<!-- JavaScript als ES-Modul laden -->
+<script type=3D"module">
+  import { Chess } from "https://jsdelivr.net";
+  import { Chessboard, FEN, BORDER_TYPE } from "https://jsdelivr.net";
+
+  // 1. Deine Buch-Partien als Datenbank (k=C3=B6nnte sp=C3=A4ter aus einer J=
+SON/PGN-Datei kommen)
+  const buchPartien =3D {
+    "1": {
+      titel: "Kapitel 1: Das Sch=C3=A4fermatt",
+      pgn: `
+        [Event "Beispiel 1"]
+        1. e4 {Wei=C3=9F er=C3=B6ffnet klassisch und =C3=B6ffnet die Diagona=
+len f=C3=BCr Dame und L=C3=A4ufer.}=20
+        e5 {Schwarz antwortet symmetrisch im Zentrum.}=20
+        2. Lc4 {Der L=C3=A4ufer zielt direkt auf das schwache Feld f7.}=20
+        Sc6 {Schwarz entwickelt einen Springer, =C3=BCbersieht aber die Droh=
+ung.}=20
+        3. Dh5 {Die Dame greift zusammen mit dem L=C3=A4ufer f7 an.}=20
+        Sf6?? {Ein schwerer Fehler! Schwarz greift die Dame an, deckt aber f=
+7 nicht.}=20
+        4. Dxf7# {Schachmatt! Der K=C3=B6nig kann nicht schlagen, da der L=C3=
+=A4ufer auf c4 deckt.}
+      `
+    },
+    "2": {
+      titel: "Kapitel 2: Grundreihenmatt",
+      pgn: `
+        [Event "Beispiel 2"]
+        [FEN "6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1"]
+        1. Td8# {Da die eigenen Bauern dem schwarzen K=C3=B6nig die Fluchtfe=
+lder nehmen, ist der Turmzug sofort Matt.}
+      `
+    }
+  };
+
+  // 2. URL-Parameter auslesen (z.B. ?partie=3D2&zug=3D1)
+  const urlParams =3D new URLSearchParams(window.location.search);
+  const partieId =3D urlParams.get('partie') || "1";
+  const startZug =3D parseInt(urlParams.get('zug')) || 0;
+
+  const aktuellePartie =3D buchPartien[partieId] || buchPartien["1"];
+  document.getElementById('game-title').textContent =3D aktuellePartie.titel=
+;
+
+  // 3. Partie mit chess.js einlesen und Historie aufbauen
+  const chess =3D new Chess();
+  chess.loadPgn(aktuellePartie.pgn);
+ =20
+  const comments =3D chess.getComments(); // Kommentare pro FEN speichern
+  const commentMap =3D new Map(comments.map(c =3D> [c.fen, c.comment]));
+ =20
+  const history =3D chess.history({ verbose: true });
+ =20
+  // Zur=C3=BCck zur Startposition der Partie gehen (unterst=C3=BCtzt auch e=
+igene FENs!)
+  while (chess.undo()) {}
+  const startFen =3D chess.fen();
+
+  // Alle Positionen (FEN + Zug-Info + Kommentar) in ein Array speichern
+  const steps =3D [{
+    fen: startFen,
+    moveText: "Ausgangsstellung",
+    comment: commentMap.get(startFen) || "Start der Stellung."
+  }];
+
+  history.forEach((move, index) =3D> {
+    chess.move(move);
+    const currentFen =3D chess.fen();
+    const moveNumber =3D Math.floor(index / 2) + 1;
+    const prefix =3D move.color =3D=3D=3D 'w' ? `${moveNumber}. ` : `${moveN=
+umber}... `;
+   =20
+    steps.push({
+      fen: currentFen,
+      moveText: `Zug ${prefix}${move.san}`,
+      comment: commentMap.get(currentFen) || ""
+    });
+  });
+
+  // 4. Schachbrett initialisieren
+  let currentStep =3D Math.min(Math.max(0, startZug), steps.length - 1);
+  let isEink =3D false;
+
+  const board =3D new Chessboard(document.getElementById("board"), {
+    position: steps[currentStep].fen,
+    assetsUrl: "https://jsdelivr.net",
+    style: { borderType: BORDER_TYPE.thin, pieces: { file: "pieces/staunty.s=
+vg" } },
+    animationDuration: 250 // Fl=C3=BCssige Animation in Millisekunden
+  });
+
+  // 5. Anzeige aktualisieren
+  function updateView() {
+    const step =3D steps[currentStep];
+    // Bei E-Ink keine Animation (false), sonst fl=C3=BCssig (true)
+    board.setPosition(step.fen, !isEink);
+    document.getElementById("move-info").textContent =3D `${step.moveText} (=
+${currentStep}/${steps.length - 1})`;
+    document.getElementById("comment-text").textContent =3D step.comment || "=
+Kein Kommentar zu diesem Zug.";
+  }
+
+  // Event-Listener f=C3=BCr Buttons
+  document.getElementById("btn-start").onclick =3D () =3D> { currentStep =3D=
+ 0; updateView(); };
+  document.getElementById("btn-prev").onclick =3D () =3D> { if (currentStep >=
+ 0) { currentStep--; updateView(); } };
+  document.getElementById("btn-next").onclick =3D () =3D> { if (currentStep <=
+ steps.length - 1) { currentStep++; updateView(); } };
+  document.getElementById("btn-end").onclick =3D () =3D> { currentStep =3D s=
+teps.length - 1; updateView(); };
+
+  // Tastatursteuerung (Pfeiltasten links/rechts)
+  document.addEventListener("keydown", (e) =3D> {
+    if (e.key =3D=3D=3D "ArrowLeft") document.getElementById("btn-prev").cli=
+ck();
+    if (e.key =3D=3D=3D "ArrowRight") document.getElementById("btn-next").cl=
+ick();
+  });
+
+  // E-Ink-Umschalter
+  const einkBtn =3D document.getElementById("eink-toggle");
+  einkBtn.onclick =3D () =3D> {
+    isEink =3D !isEink;
+    document.body.classList.toggle("e-ink", isEink);
+    einkBtn.textContent =3D isEink ? "E-Ink: AN" : "E-Ink: AUS";
+    board.props.animationDuration =3D isEink ? 0 : 250;
+  };
+
+  // Initiales Text-Update
+  updateView();
+
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js")
+        .then(() => console.log("App ist jetzt offlinefähig!"))
+        .catch((err) => console.error("Service Worker Fehler:", err));
+    });
+  }
+</script>
+
+</body>
+</html>
+
